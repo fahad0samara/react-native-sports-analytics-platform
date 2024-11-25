@@ -10,11 +10,30 @@ interface CreatePredictionParams {
   analysis: string;
 }
 
+interface FetchPredictionsParams {
+  search?: string;
+  filters?: string[];
+  limit?: number;
+}
+
+interface TrendingTopic {
+  id: string;
+  title: string;
+  type: 'match' | 'tournament' | 'team';
+  image: string;
+  stats: {
+    predictions: number;
+    accuracy: number;
+  };
+}
+
 export const predictionService = {
-  async fetchPredictions(page: number = 1, limit: number = 10): Promise<{ predictions: PredictionPost[]; hasMore: boolean }> {
+  async fetchPredictions(
+    page: number = 1,
+    params: FetchPredictionsParams = {}
+  ): Promise<{ predictions: PredictionPost[]; hasMore: boolean }> {
     try {
       // TODO: Replace with actual API call
-      // Temporary mock implementation
       const mockPredictions: PredictionPost[] = [
         {
           id: String(Math.random()),
@@ -49,21 +68,86 @@ export const predictionService = {
           },
           userInteraction: {
             liked: false,
-            commented: false,
-            shared: false,
           },
         },
       ];
 
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Simulate search and filtering
+      let filteredPredictions = mockPredictions;
+      if (params.search) {
+        const searchLower = params.search.toLowerCase();
+        filteredPredictions = filteredPredictions.filter(
+          p =>
+            p.match.homeTeam.name.toLowerCase().includes(searchLower) ||
+            p.match.awayTeam.name.toLowerCase().includes(searchLower) ||
+            p.prediction.analysis.toLowerCase().includes(searchLower)
+        );
+      }
+
+      if (params.filters?.length) {
+        filteredPredictions = filteredPredictions.filter(p =>
+          params.filters.some(
+            f =>
+              p.match.league.toLowerCase().includes(f) ||
+              (f === 'today' &&
+                new Date(p.match.date).toDateString() === new Date().toDateString()) ||
+              (f === 'week' &&
+                new Date(p.match.date).getTime() - new Date().getTime() <=
+                  7 * 24 * 60 * 60 * 1000)
+          )
+        );
+      }
 
       return {
-        predictions: mockPredictions,
-        hasMore: page < 3, // Mock pagination
+        predictions: filteredPredictions.slice(
+          (page - 1) * (params.limit || 10),
+          page * (params.limit || 10)
+        ),
+        hasMore: filteredPredictions.length > page * (params.limit || 10),
       };
     } catch (error) {
       console.error('Error fetching predictions:', error);
+      throw error;
+    }
+  },
+
+  async getTrendingTopics(): Promise<TrendingTopic[]> {
+    try {
+      // TODO: Replace with actual API call
+      return [
+        {
+          id: '1',
+          title: 'Manchester United vs Liverpool',
+          type: 'match',
+          image: 'https://example.com/match1.jpg',
+          stats: {
+            predictions: 1500,
+            accuracy: 75,
+          },
+        },
+        {
+          id: '2',
+          title: 'Premier League',
+          type: 'tournament',
+          image: 'https://example.com/premier-league.jpg',
+          stats: {
+            predictions: 5000,
+            accuracy: 82,
+          },
+        },
+        {
+          id: '3',
+          title: 'Real Madrid',
+          type: 'team',
+          image: 'https://example.com/real-madrid.jpg',
+          stats: {
+            predictions: 2500,
+            accuracy: 68,
+          },
+        },
+      ];
+    } catch (error) {
+      console.error('Error fetching trending topics:', error);
       throw error;
     }
   },

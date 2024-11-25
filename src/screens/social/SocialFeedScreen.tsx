@@ -6,6 +6,7 @@ import {
   Text,
   RefreshControl,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,22 +14,29 @@ import { colors } from '../../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import PredictionFeed from '../../components/social/PredictionFeed';
+import { TrendingTopics } from '../../components/social/TrendingTopics';
+import { SearchFilters } from '../../components/social/SearchFilters';
 import { predictionService } from '../../services/predictionService';
 import { PredictionPost } from '../../types/prediction';
-import { Share } from 'react-native';
 
 export const SocialFeedScreen = () => {
   const navigation = useNavigation();
   const [predictions, setPredictions] = useState<PredictionPost[]>([]);
+  const [trendingTopics, setTrendingTopics] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
 
   const fetchPredictions = async (pageNum: number, refresh: boolean = false) => {
     try {
       setLoading(true);
-      const { predictions: newPredictions, hasMore: more } = await predictionService.fetchPredictions(pageNum);
+      const { predictions: newPredictions, hasMore: more } = await predictionService.fetchPredictions(pageNum, {
+        search: searchQuery,
+        filters: activeFilters,
+      });
       
       setPredictions(prev => refresh ? newPredictions : [...prev, ...newPredictions]);
       setHasMore(more);
@@ -41,11 +49,21 @@ export const SocialFeedScreen = () => {
     }
   };
 
+  const fetchTrendingTopics = async () => {
+    try {
+      const topics = await predictionService.getTrendingTopics();
+      setTrendingTopics(topics);
+    } catch (error) {
+      console.error('Error fetching trending topics:', error);
+    }
+  };
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setPage(1);
     fetchPredictions(1, true);
-  }, []);
+    fetchTrendingTopics();
+  }, [searchQuery, activeFilters]);
 
   const loadMore = () => {
     if (!loading && hasMore) {
@@ -55,20 +73,29 @@ export const SocialFeedScreen = () => {
     }
   };
 
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    setPage(1);
+    fetchPredictions(1, true);
+  };
+
+  const handleFilterChange = (filters: string[]) => {
+    setActiveFilters(filters);
+    setPage(1);
+    fetchPredictions(1, true);
+  };
+
   const handleUserPress = (userId: string) => {
-    // TODO: Navigate to user profile
     navigation.navigate('UserProfile', { userId });
   };
 
   const handlePredictionPress = (predictionId: string) => {
-    // TODO: Navigate to prediction details
     navigation.navigate('PredictionDetails', { predictionId });
   };
 
   const handleLikePress = async (predictionId: string) => {
     try {
       await predictionService.likePrediction(predictionId);
-      // Optimistically update UI
       setPredictions(prev =>
         prev.map(p =>
           p.id === predictionId
@@ -88,7 +115,6 @@ export const SocialFeedScreen = () => {
       );
     } catch (error) {
       console.error('Error liking prediction:', error);
-      // TODO: Show error toast
     }
   };
 
@@ -101,58 +127,63 @@ export const SocialFeedScreen = () => {
       const prediction = predictions.find(p => p.id === predictionId);
       if (!prediction) return;
 
-      const result = await Share.share({
-        message: `Check out this prediction for ${prediction.match.homeTeam.name} vs ${prediction.match.awayTeam.name}!`,
-        // TODO: Add your app's deep link
-        url: `https://yourapp.com/predictions/${predictionId}`,
+      const shareMessage = `Check out this prediction for ${prediction.match.homeTeam.name} vs ${prediction.match.awayTeam.name}!\n\nhttps://yourapp.com/predictions/${predictionId}`;
+      
+      await Share.share({
+        message: shareMessage,
+        title: 'Share Prediction',
       });
 
-      if (result.action === Share.sharedAction) {
-        await predictionService.sharePrediction(predictionId);
-        // Optimistically update UI
-        setPredictions(prev =>
-          prev.map(p =>
-            p.id === predictionId
-              ? {
-                  ...p,
-                  stats: {
-                    ...p.stats,
-                    shares: p.stats.shares + 1,
-                  },
-                  userInteraction: {
-                    ...p.userInteraction,
-                    shared: true,
-                  },
-                }
-              : p
-          )
-        );
-      }
+      await predictionService.sharePrediction(predictionId);
+      setPredictions(prev =>
+        prev.map(p =>
+          p.id === predictionId
+            ? {
+                ...p,
+                stats: {
+                  ...p.stats,
+                  shares: p.stats.shares + 1,
+                },
+              }
+            : p
+        )
+      );
     } catch (error) {
       console.error('Error sharing prediction:', error);
-      // TODO: Show error toast
     }
+  };
+
+  const handleTopicPress = (topicId: string) => {
+    navigation.navigate('TopicDetails', { topicId });
   };
 
   useEffect(() => {
     fetchPredictions(1, true);
+    fetchTrendingTopics();
   }, []);
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={[colors.background, colors.backgroundDark]}
-        style={styles.container}
-      >
+      <LinearGradient colors={[colors.background, colors.backgroundDark]} style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Feed</Text>
           <TouchableOpacity
-            style={styles.searchButton}
-            onPress={() => navigation.navigate('Search')}
+            style={styles.createButton}
+            onPress={() => navigation.navigate('CreatePrediction')}
           >
-            <Ionicons name="search" size={24} color={colors.text} />
+            <Ionicons name="add" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
+
+        <SearchFilters
+          onSearch={handleSearch}
+          onFilterChange={handleFilterChange}
+        />
+
+        <TrendingTopics
+          topics={trendingTopics}
+          onTopicPress={handleTopicPress}
+        />
 
         <PredictionFeed
           predictions={predictions}
@@ -162,11 +193,7 @@ export const SocialFeedScreen = () => {
           onCommentPress={handleCommentPress}
           onSharePress={handleSharePress}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
@@ -195,12 +222,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: colors.text,
   },
-  searchButton: {
-    padding: 8,
+  createButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loader: {
     padding: 16,
