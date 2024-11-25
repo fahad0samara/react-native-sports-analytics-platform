@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { PredictionsStackParamList } from '../../navigation/types';
 import { Prediction } from '../../types';
+import PredictionTrends from '../../components/predictions/PredictionTrends';
+import LeaguePerformance from '../../components/predictions/LeaguePerformance';
+import StreaksAndAchievements from '../../components/predictions/StreaksAndAchievements';
 
 type PredictionStatsScreenNavigationProp = NativeStackNavigationProp<
   PredictionsStackParamList,
@@ -34,9 +37,64 @@ const StatCard = ({ title, value, subtitle }: { title: string; value: string | n
   </GlassmorphicCard>
 );
 
+const timeRangeOptions = ['1W', '1M', '3M', 'All'] as const;
+type TimeRange = typeof timeRangeOptions[number];
+
+const mockLeagueStats = {
+  leagueName: 'Premier League',
+  correct: 25,
+  incorrect: 10,
+  pending: 5,
+  totalPredictions: 40,
+  accuracy: 0.714,
+  averageConfidence: 75.5,
+};
+
+const mockStreaks = {
+  currentStreak: {
+    type: 'current' as const,
+    count: 5,
+    startDate: '2024-01-15',
+  },
+  bestStreak: {
+    type: 'best' as const,
+    count: 8,
+    startDate: '2023-12-01',
+    endDate: '2023-12-15',
+  },
+};
+
+const mockAchievements = [
+  {
+    title: 'Prediction Master',
+    description: 'Make 100 correct predictions',
+    icon: 'trophy',
+    progress: 75,
+    target: 100,
+    completed: false,
+  },
+  {
+    title: 'Hot Streak',
+    description: 'Achieve a streak of 10 correct predictions',
+    icon: 'flame',
+    progress: 8,
+    target: 10,
+    completed: false,
+  },
+  {
+    title: 'League Expert',
+    description: 'Maintain 80% accuracy in a league',
+    icon: 'medal',
+    progress: 80,
+    target: 80,
+    completed: true,
+  },
+];
+
 export default function PredictionStatsScreen() {
   const navigation = useNavigation<PredictionStatsScreenNavigationProp>();
   const predictions = useSelector((state: RootState) => state.predictions.userPredictions);
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1M');
 
   const calculateStats = (predictions: Prediction[]) => {
     const total = predictions.length;
@@ -104,8 +162,30 @@ export default function PredictionStatsScreen() {
           >
             <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Prediction Statistics</Text>
+          <Text style={styles.title}>Prediction Statistics</Text>
           <View style={styles.headerRight} />
+        </View>
+
+        <View style={styles.timeRangeContainer}>
+          {timeRangeOptions.map((range) => (
+            <TouchableOpacity
+              key={range}
+              style={[
+                styles.timeRangeButton,
+                selectedTimeRange === range && styles.selectedTimeRange,
+              ]}
+              onPress={() => setSelectedTimeRange(range)}
+            >
+              <Text
+                style={[
+                  styles.timeRangeText,
+                  selectedTimeRange === range && styles.selectedTimeRangeText,
+                ]}
+              >
+                {range}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <ScrollView
@@ -113,6 +193,22 @@ export default function PredictionStatsScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          <PredictionTrends timeRange={selectedTimeRange} />
+          
+          <View style={styles.spacing} />
+          
+          <LeaguePerformance stats={mockLeagueStats} />
+          
+          <View style={styles.spacing} />
+          
+          <StreaksAndAchievements
+            currentStreak={mockStreaks.currentStreak}
+            bestStreak={mockStreaks.bestStreak}
+            achievements={mockAchievements}
+          />
+          
+          <View style={styles.spacing} />
+          
           <View style={styles.mainStats}>
             <StatCard
               title="Accuracy"
@@ -191,13 +287,35 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
-  headerTitle: {
+  title: {
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.text.primary,
   },
   headerRight: {
     width: 40,
+  },
+  timeRangeContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 8,
+  },
+  timeRangeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  selectedTimeRange: {
+    backgroundColor: colors.primary,
+  },
+  timeRangeText: {
+    fontSize: 14,
+    color: colors.text.secondary,
+  },
+  selectedTimeRangeText: {
+    color: colors.text.light,
+    fontWeight: '500',
   },
   scrollView: {
     flex: 1,
@@ -270,5 +388,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: colors.text.primary,
+  },
+  spacing: {
+    height: 16,
   },
 });
