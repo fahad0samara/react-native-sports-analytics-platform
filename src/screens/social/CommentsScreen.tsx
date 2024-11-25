@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +18,7 @@ import { colors } from '../../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { GlassmorphicCard } from '../../components/common/GlassmorphicCard';
+import { predictionService } from '../../services/predictionService';
 
 interface Comment {
   id: string;
@@ -27,42 +30,14 @@ interface Comment {
   };
   content: string;
   timestamp: string;
-  likes: number;
-  hasLiked: boolean;
+  stats: {
+    likes: number;
+  };
+  userInteraction: {
+    liked: boolean;
+  };
   replies?: Comment[];
 }
-
-// Mock data - Replace with actual API calls
-const mockComments: Comment[] = [
-  {
-    id: '1',
-    user: {
-      id: 'user1',
-      username: 'JohnDoe',
-      avatar: 'https://example.com/avatar1.jpg',
-      verified: true,
-    },
-    content: 'Great analysis! I completely agree with your prediction.',
-    timestamp: '2024-02-19T12:00:00Z',
-    likes: 24,
-    hasLiked: false,
-    replies: [
-      {
-        id: '1.1',
-        user: {
-          id: 'user2',
-          username: 'JaneSmith',
-          avatar: 'https://example.com/avatar2.jpg',
-        },
-        content: 'The home advantage will definitely be a crucial factor!',
-        timestamp: '2024-02-19T12:30:00Z',
-        likes: 8,
-        hasLiked: false,
-      },
-    ],
-  },
-  // Add more mock comments...
-];
 
 const CommentItem = ({
   comment,
@@ -87,16 +62,11 @@ const CommentItem = ({
         <View style={styles.usernameContainer}>
           <Text style={styles.username}>{comment.user.username}</Text>
           {comment.user.verified && (
-            <Ionicons
-              name="checkmark-circle"
-              size={16}
-              color={colors.status.success}
-              style={styles.verifiedBadge}
-            />
+            <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
           )}
         </View>
         <Text style={styles.timestamp}>
-          {new Date(comment.timestamp).toLocaleDateString()}
+          {new Date(comment.timestamp).toRelativeTimeString()}
         </Text>
       </View>
     </TouchableOpacity>
@@ -109,24 +79,25 @@ const CommentItem = ({
         onPress={() => onLikePress(comment.id)}
       >
         <Ionicons
-          name={comment.hasLiked ? 'heart' : 'heart-outline'}
+          name={comment.userInteraction.liked ? 'heart' : 'heart-outline'}
           size={20}
-          color={comment.hasLiked ? colors.status.error : colors.text.secondary}
+          color={comment.userInteraction.liked ? colors.primary : colors.text}
         />
-        <Text style={styles.actionText}>{comment.likes}</Text>
+        <Text style={styles.actionText}>{comment.stats.likes}</Text>
       </TouchableOpacity>
+
       {!isReply && (
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => onReplyPress(comment)}
         >
-          <Ionicons name="return-down-forward" size={20} color={colors.text.secondary} />
+          <Ionicons name="return-down-forward-outline" size={20} color={colors.text} />
           <Text style={styles.actionText}>Reply</Text>
         </TouchableOpacity>
       )}
     </View>
 
-    {comment.replies && comment.replies.length > 0 && (
+    {comment.replies && (
       <View style={styles.repliesContainer}>
         {comment.replies.map((reply) => (
           <CommentItem
@@ -143,53 +114,137 @@ const CommentItem = ({
   </GlassmorphicCard>
 );
 
-export default function CommentsScreen() {
+export const CommentsScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const predictionId = route.params?.predictionId;
+
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+
+  const fetchComments = async (pageNum: number, refresh: boolean = false) => {
+    try {
+      setLoading(true);
+      // TODO: Replace with actual API call
+      const response = await predictionService.getComments(predictionId, pageNum);
+      setComments(prev => refresh ? response.comments : [...prev, ...response.comments]);
+      setHasMore(response.hasMore);
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setPage(1);
+    fetchComments(1, true);
+  };
+
+  const loadMore = () => {
+    if (!loading && hasMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchComments(nextPage);
+    }
+  };
 
   const handleUserPress = (userId: string) => {
     navigation.navigate('UserProfile', { userId });
   };
 
-  const handleLikePress = (commentId: string) => {
-    // Implement like functionality
-    console.log('Like pressed for comment:', commentId);
+  const handleLikePress = async (commentId: string) => {
+    try {
+      await predictionService.likeComment(commentId);
+      // Optimistically update UI
+      setComments(prev =>
+        prev.map(c =>
+          c.id === commentId
+            ? {
+                ...c,
+                stats: {
+                  ...c.stats,
+                  likes: c.userInteraction.liked ? c.stats.likes - 1 : c.stats.likes + 1,
+                },
+                userInteraction: {
+                  ...c.userInteraction,
+                  liked: !c.userInteraction.liked,
+                },
+              }
+            : c
+        )
+      );
+    } catch (error) {
+      console.error('Error liking comment:', error);
+    }
   };
 
   const handleReplyPress = (comment: Comment) => {
     setReplyingTo(comment);
   };
 
-  const handleSubmitComment = () => {
-    if (newComment.trim()) {
-      // Implement comment submission
-      console.log('Submitting comment:', {
+  const handleSubmitComment = async () => {
+    if (!newComment.trim()) return;
+
+    try {
+      const comment = await predictionService.createComment({
+        predictionId,
         content: newComment,
-        replyTo: replyingTo?.id,
+        replyToId: replyingTo?.id,
       });
+
+      if (replyingTo) {
+        setComments(prev =>
+          prev.map(c =>
+            c.id === replyingTo.id
+              ? {
+                  ...c,
+                  replies: [...(c.replies || []), comment],
+                }
+              : c
+          )
+        );
+      } else {
+        setComments(prev => [comment, ...prev]);
+      }
+
       setNewComment('');
       setReplyingTo(null);
+    } catch (error) {
+      console.error('Error creating comment:', error);
     }
   };
 
+  useEffect(() => {
+    fetchComments(1, true);
+  }, [predictionId]);
+
   return (
-    <LinearGradient colors={colors.gradients.primary} style={styles.container}>
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <SafeAreaView style={styles.container}>
+      <LinearGradient
+        colors={[colors.background, colors.backgroundDark]}
+        style={styles.container}
+      >
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>Comments</Text>
-          <View style={styles.placeholder} />
+          <View style={styles.backButton} />
         </View>
 
         <FlatList
-          data={mockComments}
+          data={comments}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <CommentItem
@@ -200,6 +255,18 @@ export default function CommentsScreen() {
             />
           )}
           contentContainerStyle={styles.commentsList}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loading && !refreshing ? (
+              <View style={styles.loader}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : null
+          }
         />
 
         <KeyboardAvoidingView
@@ -213,7 +280,7 @@ export default function CommentsScreen() {
                 Replying to {replyingTo.user.username}
               </Text>
               <TouchableOpacity onPress={() => setReplyingTo(null)}>
-                <Ionicons name="close" size={20} color={colors.text.secondary} />
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
           )}
@@ -221,7 +288,7 @@ export default function CommentsScreen() {
             <TextInput
               style={styles.input}
               placeholder="Add a comment..."
-              placeholderTextColor={colors.text.secondary}
+              placeholderTextColor={colors.textSecondary}
               value={newComment}
               onChangeText={setNewComment}
               multiline
@@ -237,46 +304,37 @@ export default function CommentsScreen() {
               <Ionicons
                 name="send"
                 size={24}
-                color={
-                  newComment.trim() ? colors.text.light : colors.text.secondary
-                }
+                color={newComment.trim() ? colors.primary : colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      </SafeAreaView>
-    </LinearGradient>
+      </LinearGradient>
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  safeArea: {
-    flex: 1,
-  },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: colors.text.primary,
-  },
-  placeholder: {
-    width: 40,
+    color: colors.text,
   },
   commentsList: {
     padding: 16,
@@ -284,6 +342,7 @@ const styles = StyleSheet.create({
   },
   commentCard: {
     padding: 16,
+    gap: 12,
   },
   replyCard: {
     marginLeft: 32,
@@ -292,13 +351,12 @@ const styles = StyleSheet.create({
   commentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 12,
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   userInfo: {
     flex: 1,
@@ -306,24 +364,21 @@ const styles = StyleSheet.create({
   usernameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
   username: {
     fontSize: 14,
-    fontWeight: '500',
-    color: colors.text.primary,
-  },
-  verifiedBadge: {
-    marginLeft: 4,
+    fontWeight: '600',
+    color: colors.text,
   },
   timestamp: {
     fontSize: 12,
-    color: colors.text.secondary,
+    color: colors.textSecondary,
   },
   commentContent: {
     fontSize: 14,
-    color: colors.text.primary,
+    color: colors.text,
     lineHeight: 20,
-    marginBottom: 12,
   },
   commentActions: {
     flexDirection: 'row',
@@ -336,24 +391,34 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 12,
-    color: colors.text.secondary,
+    color: colors.textSecondary,
   },
   repliesContainer: {
     marginTop: 8,
+    gap: 8,
+  },
+  loader: {
+    padding: 16,
+    alignItems: 'center',
   },
   inputContainer: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
     padding: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    gap: 8,
   },
   replyingToContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
   },
   replyingToText: {
     fontSize: 12,
-    color: colors.text.secondary,
+    color: colors.textSecondary,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -363,23 +428,22 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minHeight: 40,
-    maxHeight: 100,
+    maxHeight: 120,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    color: colors.text.primary,
+    paddingRight: 48,
+    color: colors.text,
     fontSize: 14,
   },
   sendButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    opacity: 0.5,
   },
 });

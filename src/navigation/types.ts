@@ -47,3 +47,11 @@ export type ProfileStackParamList = {
   Settings: undefined;
   Statistics: undefined;
 };
+
+export type SocialStackParamList = {
+  SocialFeed: undefined;
+  Comments: { predictionId: string };
+  UserProfile: { userId: string };
+  Search: undefined;
+  PredictionDetails: { predictionId: string };
+};

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   Text,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,148 +13,149 @@ import { colors } from '../../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import PredictionFeed from '../../components/social/PredictionFeed';
+import { predictionService } from '../../services/predictionService';
+import { PredictionPost } from '../../types/prediction';
+import { Share } from 'react-native';
 
-// Mock data - Replace with actual API calls
-const mockPredictions = [
-  {
-    id: '1',
-    user: {
-      id: 'user1',
-      username: 'JohnDoe',
-      avatar: 'https://example.com/avatar1.jpg',
-      verified: true,
-    },
-    match: {
-      homeTeam: {
-        name: 'Manchester United',
-        logo: 'https://example.com/man-utd.png',
-      },
-      awayTeam: {
-        name: 'Liverpool',
-        logo: 'https://example.com/liverpool.png',
-      },
-      date: '2024-02-20T15:00:00Z',
-      league: 'Premier League',
-    },
-    prediction: {
-      winner: 'home' as const,
-      confidence: 85,
-      analysis: 'Manchester United's recent form and home advantage gives them the edge in this crucial match.',
-      timestamp: '2024-02-19T10:30:00Z',
-    },
-    social: {
-      likes: 128,
-      comments: 32,
-      hasLiked: false,
-    },
-  },
-  // Add more mock predictions...
-];
-
-export default function SocialFeedScreen() {
+export const SocialFeedScreen = () => {
   const navigation = useNavigation();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [feedFilter, setFeedFilter] = useState<'following' | 'trending'>('following');
+  const [predictions, setPredictions] = useState<PredictionPost[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    // Implement refresh logic here
-    setTimeout(() => setIsRefreshing(false), 1500);
+  const fetchPredictions = async (pageNum: number, refresh: boolean = false) => {
+    try {
+      setLoading(true);
+      const { predictions: newPredictions, hasMore: more } = await predictionService.fetchPredictions(pageNum);
+      
+      setPredictions(prev => refresh ? newPredictions : [...prev, ...newPredictions]);
+      setHasMore(more);
+    } catch (error) {
+      console.error('Error fetching predictions:', error);
+      // TODO: Show error toast
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setPage(1);
+    fetchPredictions(1, true);
+  }, []);
+
+  const loadMore = () => {
+    if (!loading && hasMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchPredictions(nextPage);
+    }
   };
 
   const handleUserPress = (userId: string) => {
-    // Navigate to user profile
+    // TODO: Navigate to user profile
     navigation.navigate('UserProfile', { userId });
   };
 
   const handlePredictionPress = (predictionId: string) => {
-    // Navigate to prediction details
+    // TODO: Navigate to prediction details
     navigation.navigate('PredictionDetails', { predictionId });
   };
 
-  const handleLikePress = (predictionId: string) => {
-    // Implement like functionality
-    console.log('Like pressed for prediction:', predictionId);
+  const handleLikePress = async (predictionId: string) => {
+    try {
+      await predictionService.likePrediction(predictionId);
+      // Optimistically update UI
+      setPredictions(prev =>
+        prev.map(p =>
+          p.id === predictionId
+            ? {
+                ...p,
+                stats: {
+                  ...p.stats,
+                  likes: p.userInteraction.liked ? p.stats.likes - 1 : p.stats.likes + 1,
+                },
+                userInteraction: {
+                  ...p.userInteraction,
+                  liked: !p.userInteraction.liked,
+                },
+              }
+            : p
+        )
+      );
+    } catch (error) {
+      console.error('Error liking prediction:', error);
+      // TODO: Show error toast
+    }
   };
 
   const handleCommentPress = (predictionId: string) => {
-    // Navigate to comments screen
     navigation.navigate('Comments', { predictionId });
   };
 
-  const handleSharePress = (predictionId: string) => {
-    // Implement share functionality
-    console.log('Share pressed for prediction:', predictionId);
+  const handleSharePress = async (predictionId: string) => {
+    try {
+      const prediction = predictions.find(p => p.id === predictionId);
+      if (!prediction) return;
+
+      const result = await Share.share({
+        message: `Check out this prediction for ${prediction.match.homeTeam.name} vs ${prediction.match.awayTeam.name}!`,
+        // TODO: Add your app's deep link
+        url: `https://yourapp.com/predictions/${predictionId}`,
+      });
+
+      if (result.action === Share.sharedAction) {
+        await predictionService.sharePrediction(predictionId);
+        // Optimistically update UI
+        setPredictions(prev =>
+          prev.map(p =>
+            p.id === predictionId
+              ? {
+                  ...p,
+                  stats: {
+                    ...p.stats,
+                    shares: p.stats.shares + 1,
+                  },
+                  userInteraction: {
+                    ...p.userInteraction,
+                    shared: true,
+                  },
+                }
+              : p
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error sharing prediction:', error);
+      // TODO: Show error toast
+    }
   };
 
+  useEffect(() => {
+    fetchPredictions(1, true);
+  }, []);
+
   return (
-    <LinearGradient colors={colors.gradients.primary} style={styles.container}>
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <SafeAreaView style={styles.container}>
+      <LinearGradient
+        colors={[colors.background, colors.backgroundDark]}
+        style={styles.container}
+      >
         <View style={styles.header}>
-          <Text style={styles.title}>Predictions Feed</Text>
+          <Text style={styles.title}>Feed</Text>
           <TouchableOpacity
             style={styles.searchButton}
             onPress={() => navigation.navigate('Search')}
           >
-            <Ionicons name="search" size={24} color={colors.text.primary} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.filterContainer}>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              feedFilter === 'following' && styles.activeFilter,
-            ]}
-            onPress={() => setFeedFilter('following')}
-          >
-            <Ionicons
-              name="people"
-              size={20}
-              color={
-                feedFilter === 'following'
-                  ? colors.text.light
-                  : colors.text.secondary
-              }
-            />
-            <Text
-              style={[
-                styles.filterText,
-                feedFilter === 'following' && styles.activeFilterText,
-              ]}
-            >
-              Following
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              feedFilter === 'trending' && styles.activeFilter,
-            ]}
-            onPress={() => setFeedFilter('trending')}
-          >
-            <Ionicons
-              name="trending-up"
-              size={20}
-              color={
-                feedFilter === 'trending'
-                  ? colors.text.light
-                  : colors.text.secondary
-              }
-            />
-            <Text
-              style={[
-                styles.filterText,
-                feedFilter === 'trending' && styles.activeFilterText,
-              ]}
-            >
-              Trending
-            </Text>
+            <Ionicons name="search" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
 
         <PredictionFeed
-          predictions={mockPredictions}
+          predictions={predictions}
           onUserPress={handleUserPress}
           onPredictionPress={handlePredictionPress}
           onLikePress={handleLikePress}
@@ -161,93 +163,47 @@ export default function SocialFeedScreen() {
           onSharePress={handleSharePress}
           refreshControl={
             <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.text.primary}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
             />
           }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loading && !refreshing ? (
+              <View style={styles.loader}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : null
+          }
         />
-
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={() => navigation.navigate('CreatePrediction')}
-        >
-          <Ionicons name="add" size={24} color={colors.text.light} />
-        </TouchableOpacity>
-      </SafeAreaView>
-    </LinearGradient>
+      </LinearGradient>
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
-  safeArea: {
     flex: 1,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.text.primary,
+    color: colors.text,
   },
   searchButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
   },
-  filterContainer: {
-    flexDirection: 'row',
+  loader: {
     padding: 16,
-    gap: 12,
-  },
-  filterButton: {
-    flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  activeFilter: {
-    backgroundColor: colors.primary,
-  },
-  filterText: {
-    fontSize: 14,
-    color: colors.text.secondary,
-  },
-  activeFilterText: {
-    color: colors.text.light,
-    fontWeight: '500',
-  },
-  createButton: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
   },
 });
