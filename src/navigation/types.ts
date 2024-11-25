@@ -14,7 +14,7 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Matches: NavigatorScreenParams<MatchesStackParamList>;
-  Predictions: undefined;
+  Predictions: NavigatorScreenParams<PredictionsStackParamList>;
   Profile: undefined;
 };
 
@@ -34,6 +34,7 @@ export type PredictionsStackParamList = {
   PredictionsList: undefined;
   PredictionDetails: { predictionId: string };
   PredictionStats: undefined;
+  CreatePrediction: { match: Match };
 };
 
 export type ProfileStackParamList = {

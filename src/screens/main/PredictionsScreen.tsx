@@ -16,6 +16,7 @@ import { Match, Prediction } from '../../types';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../store';
 import PredictionStats from '../../components/predictions/PredictionStats';
+import PredictionTrends from '../../components/predictions/PredictionTrends';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -157,6 +158,7 @@ export default function PredictionsScreen() {
         </View>
 
         <PredictionStats predictions={userPredictions as PredictionWithMatch[]} />
+        <PredictionTrends predictions={userPredictions as PredictionWithMatch[]} />
 
         <View style={styles.filterContainer}>
           <ScrollView 
@@ -198,7 +200,22 @@ export default function PredictionsScreen() {
           )}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No predictions found</Text>
+              <Text style={styles.emptySubtext}>
+                Start making predictions to see them here
+              </Text>
+            </View>
+          )}
         />
+
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => navigation.navigate('CreatePrediction')}
+        >
+          <Ionicons name="add" size={24} color={colors.text.light} />
+        </TouchableOpacity>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -339,5 +356,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: colors.text.light,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text.primary,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
 });
