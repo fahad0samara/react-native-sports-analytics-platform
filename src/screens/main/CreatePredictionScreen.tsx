@@ -19,6 +19,8 @@ import { PredictionsStackParamList } from '../../navigation/types';
 import { Match } from '../../types';
 import Slider from '@react-native-community/slider';
 import { addPrediction } from '../../store/slices/predictionsSlice';
+import HeadToHeadAnalysis from '../../components/predictions/HeadToHeadAnalysis';
+import PredictionInsights from '../../components/predictions/PredictionInsights';
 
 type CreatePredictionScreenRouteProp = RouteProp<
   PredictionsStackParamList,
@@ -173,6 +175,10 @@ export default function CreatePredictionScreen() {
               />
             </View>
           </GlassmorphicCard>
+
+          <HeadToHeadAnalysis match={match} />
+          <View style={styles.spacing} />
+          <PredictionInsights match={match} />
 
           {aiAnalysis && (
             <GlassmorphicCard style={styles.analysisCard}>
@@ -333,5 +339,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: colors.text.light,
+  },
+  spacing: {
+    height: 16,
   },
 });
