@@ -1,45 +1,45 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider } from 'react-redux';
 import { store } from './src/store';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { RootStackParamList } from './src/navigation/types';
-import { AuthNavigator } from './src/navigation/AuthNavigator';
-import { MainNavigator } from './src/navigation/MainNavigator';
-import { StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import RootNavigator from './src/navigation/RootNavigator';
+import { onAuthStateChanged } from './src/services/firebase';
+import { setUser, clearUser } from './src/store/slices/authSlice';
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+function AppContent() {
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged((user) => {
+      if (user) {
+        store.dispatch(setUser({
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+        }));
+      } else {
+        store.dispatch(clearUser());
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <NavigationContainer>
+      <StatusBar style="light" />
+      <RootNavigator />
+    </NavigationContainer>
+  );
+}
 
 export default function App() {
   return (
     <Provider store={store}>
-      <SafeAreaProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <NavigationContainer>
-            <StatusBar style="light" />
-            <Stack.Navigator
-              screenOptions={{
-                headerShown: false,
-              }}
-            >
-              <Stack.Screen name="Auth" component={AuthNavigator} />
-              <Stack.Screen name="Main" component={MainNavigator} />
-            </Stack.Navigator>
-          </NavigationContainer>
-        </GestureHandlerRootView>
-      </SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AppContent />
+      </GestureHandlerRootView>
     </Provider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

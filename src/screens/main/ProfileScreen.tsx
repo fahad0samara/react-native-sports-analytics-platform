@@ -1,21 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme/colors';
 import { GlassmorphicCard } from '../../components/common/GlassmorphicCard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useDispatch } from 'react-redux';
-import { logout } from '../../store/slices/authSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { signOut } from '../../services/firebase';
+import { clearUser } from '../../store/slices/authSlice';
+import { RootState } from '../../store';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ProfileStackParamList } from '../../navigation/types';
 
-const dummyUser = {
-  username: 'John Doe',
-  email: 'john.doe@example.com',
-  predictionAccuracy: 85,
-  totalPredictions: 124,
-  winningStreak: 12,
-  memberSince: '2024-01-01',
-};
+type ProfileScreenNavigationProp = NativeStackNavigationProp<ProfileStackParamList, 'ProfileMain'>;
 
 const StatCard = ({ label, value }: { label: string; value: string | number }) => (
   <GlassmorphicCard style={styles.statCard}>
@@ -42,10 +40,24 @@ const MenuButton = ({
 
 export default function ProfileScreen() {
   const dispatch = useDispatch();
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
+  const user = useSelector((state: RootState) => state.auth.user);
 
-  const handleLogout = () => {
-    dispatch(logout());
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      dispatch(clearUser());
+    } catch (error) {
+      Alert.alert('Error', 'Failed to logout. Please try again.');
+    }
   };
+
+  const getInitials = (name: string | null) => {
+    if (!name) return '?';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  };
+
+  if (!user) return null;
 
   return (
     <LinearGradient
@@ -56,42 +68,61 @@ export default function ProfileScreen() {
         <ScrollView style={styles.scrollView}>
           <View style={styles.header}>
             <View style={styles.profileInfo}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {dummyUser.username.split(' ').map(n => n[0]).join('')}
-                </Text>
-              </View>
-              <Text style={styles.username}>{dummyUser.username}</Text>
-              <Text style={styles.email}>{dummyUser.email}</Text>
+              <TouchableOpacity 
+                style={styles.avatar}
+                onPress={() => navigation.navigate('EditProfile')}
+              >
+                {user.photoURL ? (
+                  <Image 
+                    source={{ uri: user.photoURL }} 
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>
+                    {getInitials(user.displayName)}
+                  </Text>
+                )}
+                <View style={styles.editIconContainer}>
+                  <Ionicons name="pencil" size={16} color={colors.text.light} />
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.username}>{user.displayName || 'User'}</Text>
+              <Text style={styles.email}>{user.email}</Text>
             </View>
           </View>
 
           <View style={styles.statsContainer}>
-            <StatCard label="Accuracy" value={`${dummyUser.predictionAccuracy}%`} />
-            <StatCard label="Predictions" value={dummyUser.totalPredictions} />
-            <StatCard label="Streak" value={dummyUser.winningStreak} />
+            <StatCard label="Accuracy" value="85%" />
+            <StatCard label="Predictions" value="124" />
+            <StatCard label="Streak" value="12" />
           </View>
 
           <GlassmorphicCard style={styles.menuCard}>
             <MenuButton
               icon="person-outline"
               label="Edit Profile"
-              onPress={() => {}}
+              onPress={() => navigation.navigate('EditProfile')}
             />
             <MenuButton
               icon="settings-outline"
               label="Settings"
-              onPress={() => {}}
+              onPress={() => {
+                // TODO: Navigate to settings
+              }}
             />
             <MenuButton
               icon="notifications-outline"
               label="Notifications"
-              onPress={() => {}}
+              onPress={() => {
+                // TODO: Navigate to notifications
+              }}
             />
             <MenuButton
               icon="help-circle-outline"
               label="Help & Support"
-              onPress={() => {}}
+              onPress={() => {
+                // TODO: Navigate to help
+              }}
             />
             <MenuButton
               icon="log-out-outline"
@@ -114,9 +145,11 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    padding: 20,
   },
   header: {
-    padding: 20,
+    alignItems: 'center',
+    marginBottom: 30,
   },
   profileInfo: {
     alignItems: 'center',
@@ -125,10 +158,16 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 15,
+    position: 'relative',
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   avatarText: {
     fontSize: 36,
@@ -148,13 +187,13 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 20,
+    marginBottom: 30,
   },
   statCard: {
     flex: 1,
     marginHorizontal: 5,
-    alignItems: 'center',
     padding: 15,
+    alignItems: 'center',
   },
   statValue: {
     fontSize: 24,
@@ -167,20 +206,33 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
   menuCard: {
-    margin: 20,
-    marginTop: 0,
+    padding: 0,
+    overflow: 'hidden',
   },
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
+    padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   menuButtonText: {
     flex: 1,
+    marginLeft: 15,
     fontSize: 16,
     color: colors.text.primary,
-    marginLeft: 15,
+  },
+  editIconContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: colors.primary,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.background,
   },
 });

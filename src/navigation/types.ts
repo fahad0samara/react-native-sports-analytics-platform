@@ -12,26 +12,29 @@ export type RootStackParamList = {
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
-  ForgotPassword: undefined;
 };
 
 export type MainTabParamList = {
   Home: undefined;
   Matches: NavigatorScreenParams<MatchesStackParamList>;
-  Predictions: NavigatorScreenParams<PredictionsStackParamList>;
-  Profile: undefined;
+  Predictions: undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList>;
+};
+
+export type MatchesStackParamList = {
+  MatchesList: undefined;
+  MatchDetails: { matchId: string };
+};
+
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
+  EditProfile: undefined;
 };
 
 export type HomeStackParamList = {
   HomeScreen: undefined;
   MatchDetails: { matchId: string };
   TeamDetails: { teamId: string };
-};
-
-export type MatchesStackParamList = {
-  MatchesList: undefined;
-  MatchDetails: { matchId: string };
-  CreatePrediction: { matchId: string };
 };
 
 export type PredictionsStackParamList = {
@@ -41,13 +44,6 @@ export type PredictionsStackParamList = {
   CreatePrediction: { match: Match };
 };
 
-export type ProfileStackParamList = {
-  ProfileScreen: undefined;
-  EditProfile: undefined;
-  Settings: undefined;
-  Statistics: undefined;
-};
-
 export type SocialStackParamList = {
   SocialFeed: undefined;
   Comments: { predictionId: string };
@@ -55,3 +51,9 @@ export type SocialStackParamList = {
   Search: undefined;
   PredictionDetails: { predictionId: string };
 };
+
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends MainTabParamList {}
+  }
+}

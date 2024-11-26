@@ -7,11 +7,13 @@ import MatchesScreen from '../screens/main/MatchesScreen';
 import MatchDetailsScreen from '../screens/main/MatchDetailsScreen';
 import PredictionsScreen from '../screens/main/PredictionsScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
+import EditProfileScreen from '../screens/main/EditProfileScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const MatchesStack = createNativeStackNavigator();
+const ProfileStack = createNativeStackNavigator();
 
 const MatchesNavigator = () => (
   <MatchesStack.Navigator
@@ -22,6 +24,17 @@ const MatchesNavigator = () => (
     <MatchesStack.Screen name="MatchesList" component={MatchesScreen} />
     <MatchesStack.Screen name="MatchDetails" component={MatchDetailsScreen} />
   </MatchesStack.Navigator>
+);
+
+const ProfileNavigator = () => (
+  <ProfileStack.Navigator
+    screenOptions={{
+      headerShown: false,
+    }}
+  >
+    <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+    <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
+  </ProfileStack.Navigator>
 );
 
 export default function MainNavigator() {
@@ -66,7 +79,7 @@ export default function MainNavigator() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Matches" component={MatchesNavigator} />
       <Tab.Screen name="Predictions" component={PredictionsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile" component={ProfileNavigator} />
     </Tab.Navigator>
   );
 }

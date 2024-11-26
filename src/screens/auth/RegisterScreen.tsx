@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDispatch } from 'react-redux';
@@ -16,6 +17,8 @@ import { GlassmorphicCard } from '../../components/common/GlassmorphicCard';
 import { AuthStackParamList } from '../../navigation/types';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
+import { createUserWithEmailAndPassword, updateProfile } from '../../services/firebase';
+import { setUser, setLoading, setError } from '../../store/slices/authSlice';
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
 
@@ -24,14 +27,55 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigation = useNavigation<RegisterScreenNavigationProp>();
   const dispatch = useDispatch();
 
   const handleRegister = async () => {
-    // TODO: Implement registration logic
-    if (password !== confirmPassword) {
-      // Show error message
+    if (!username || !email || !password || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all fields');
       return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password should be at least 6 characters long');
+      return;
+    }
+
+    setIsLoading(true);
+    dispatch(setLoading(true));
+
+    try {
+      const user = await createUserWithEmailAndPassword(email, password);
+      await updateProfile(user, { displayName: username });
+      
+      dispatch(setUser({
+        id: user.uid,
+        email: user.email,
+        displayName: username,
+        photoURL: user.photoURL,
+      }));
+
+      navigation.navigate('Login');
+    } catch (error: any) {
+      let errorMessage = 'Registration failed';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Email is already registered';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password is too weak';
+      }
+      Alert.alert('Error', errorMessage);
+      dispatch(setError(errorMessage));
+    } finally {
+      setIsLoading(false);
+      dispatch(setLoading(false));
     }
   };
 
@@ -58,6 +102,7 @@ export default function RegisterScreen() {
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"
+                editable={!isLoading}
               />
               <TextInput
                 style={styles.input}
@@ -67,6 +112,7 @@ export default function RegisterScreen() {
                 onChangeText={setEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
+                editable={!isLoading}
               />
               <TextInput
                 style={styles.input}
@@ -75,6 +121,7 @@ export default function RegisterScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
+                editable={!isLoading}
               />
               <TextInput
                 style={styles.input}
@@ -83,17 +130,22 @@ export default function RegisterScreen() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
+                editable={!isLoading}
               />
             </View>
             <TouchableOpacity
-              style={styles.registerButton}
+              style={[styles.registerButton, isLoading && styles.disabledButton]}
               onPress={handleRegister}
+              disabled={isLoading}
             >
-              <Text style={styles.registerButtonText}>Register</Text>
+              <Text style={styles.registerButtonText}>
+                {isLoading ? 'Creating Account...' : 'Register'}
+              </Text>
             </TouchableOpacity>
             <View style={styles.footer}>
               <TouchableOpacity
                 onPress={() => navigation.navigate('Login')}
+                disabled={isLoading}
               >
                 <Text style={styles.footerText}>Already have an account? Login</Text>
               </TouchableOpacity>
@@ -149,11 +201,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   footer: {
-    alignItems: 'center',
     marginTop: 20,
+    alignItems: 'center',
   },
   footerText: {
-    color: colors.text.secondary,
+    color: colors.text.primary,
     fontSize: 14,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
 });
