@@ -1,151 +1,115 @@
 import React, { useState } from 'react';
-import {
-  View,
-  TextInput,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
-} from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useNavigation } from '@react-navigation/native';
-import { signIn } from '../../services/firebase';
-import { AuthStackParamList } from '../../navigation/types';
-import { useDispatch } from 'react-redux';
-import { setUser, setLoading, setError } from '../../store/slices/authSlice';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme/colors';
 import { GlassmorphicCard } from '../../components/common/GlassmorphicCard';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { useDispatch } from 'react-redux';
+import { signIn } from '../../services/firebase';
+import { setUser, setError } from '../../store/slices/authSlice';
+import { Input } from '../../components/common/Input';
+import { Button } from '../../components/common/Button';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { AuthStackParamList } from '../../navigation/types';
+import { useNavigation } from '@react-navigation/native';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const navigation = useNavigation<LoginScreenNavigationProp>();
+  const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
+  const navigation = useNavigation<LoginScreenNavigationProp>();
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      dispatch(setError('Please fill in all fields'));
       return;
     }
 
-    setIsLoading(true);
-    dispatch(setLoading(true));
     try {
-      const userCredential = await signIn(email, password);
-      dispatch(setUser({
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        displayName: userCredential.user.displayName,
-        photoURL: userCredential.user.photoURL,
-      }));
-    } catch (error: any) {
-      let errorMessage = 'Login failed';
-      if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address';
-      } else if (error.code === 'auth/user-not-found') {
-        errorMessage = 'No account found with this email';
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Invalid password';
+      setLoading(true);
+      const { user, error } = await signIn(email, password);
+      if (user) {
+        dispatch(setUser({
+          id: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+        }));
+        // Navigate to the Main screen after successful login
+        navigation.navigate('Main');
+      } else {
+        dispatch(setError(error));
       }
-      Alert.alert('Error', errorMessage);
-      dispatch(setError(errorMessage));
+    } catch (error: any) {
+      dispatch(setError(error.message));
     } finally {
-      setIsLoading(false);
-      dispatch(setLoading(false));
+      setLoading(false);
     }
   };
 
   return (
-    <LinearGradient
-      colors={colors.gradients.primary}
-      style={styles.container}
-    >
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView 
+    <LinearGradient colors={colors.gradients.primary} style={styles.container}>
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
+          style={styles.keyboardAvoid}
         >
-          <View style={styles.content}>
-            <View style={styles.logoContainer}>
-              <Ionicons 
-                name="fitness-outline" 
-                size={80} 
-                color={colors.text.light} 
-              />
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Welcome Back</Text>
+              <Text style={styles.headerSubtitle}>Sign in to continue</Text>
             </View>
 
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue</Text>
+            <GlassmorphicCard style={styles.card}>
+              <Input
+                placeholder="Email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                icon="mail-outline"
+              />
 
-            <GlassmorphicCard style={styles.formCard}>
-              <View style={styles.inputContainer}>
-                <Ionicons name="mail-outline" size={20} color={colors.text.secondary} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email"
-                  placeholderTextColor={colors.text.secondary}
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </View>
+              <Input
+                placeholder="Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                icon="lock-closed-outline"
+              />
 
-              <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={20} color={colors.text.secondary} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  placeholderTextColor={colors.text.secondary}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity 
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeIcon}
+              <Button
+                title={loading ? 'Signing in...' : 'Sign In'}
+                onPress={handleLogin}
+                disabled={loading}
+                style={styles.button}
+              >
+                {loading && <ActivityIndicator color={colors.text.light} />}
+              </Button>
+
+              <View style={styles.links}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('ForgotPassword')}
+                  style={styles.link}
                 >
-                  <Ionicons 
-                    name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                    size={20} 
-                    color={colors.text.secondary} 
-                  />
+                  <Text style={styles.linkText}>Forgot Password?</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Register')}
+                  style={styles.link}
+                >
+                  <Text style={styles.linkText}>Create Account</Text>
                 </TouchableOpacity>
               </View>
-
-              <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
-                onPress={handleLogin}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color={colors.text.light} />
-                ) : (
-                  <Text style={styles.buttonText}>Sign In</Text>
-                )}
-              </TouchableOpacity>
             </GlassmorphicCard>
-
-            <TouchableOpacity
-              style={styles.registerButton}
-              onPress={() => navigation.navigate('Register')}
-            >
-              <Text style={styles.registerText}>
-                Don't have an account? <Text style={styles.registerLink}>Sign Up</Text>
-              </Text>
-            </TouchableOpacity>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
@@ -159,78 +123,46 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  keyboardView: {
+  keyboardAvoid: {
     flex: 1,
   },
-  content: {
-    flex: 1,
-    padding: 20,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+    padding: 20,
   },
-  logoContainer: {
+  header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
   },
-  title: {
+  headerTitle: {
     fontSize: 32,
     fontWeight: 'bold',
     color: colors.text.light,
-    textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 18,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: 40,
-  },
-  formCard: {
-    padding: 20,
-    marginBottom: 20,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    marginBottom: 15,
-  },
-  input: {
-    flex: 1,
-    color: colors.text.primary,
+  headerSubtitle: {
     fontSize: 16,
-    paddingVertical: 15,
-    paddingLeft: 10,
+    color: colors.text.light,
+    opacity: 0.8,
   },
-  eyeIcon: {
-    padding: 10,
+  card: {
+    padding: 20,
   },
   button: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: colors.text.light,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  registerButton: {
     marginTop: 20,
   },
-  registerText: {
-    color: colors.text.secondary,
-    fontSize: 16,
-    textAlign: 'center',
+  links: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
   },
-  registerLink: {
-    color: colors.primary,
-    fontWeight: 'bold',
+  link: {
+    padding: 8,
+  },
+  linkText: {
+    color: colors.text.light,
+    fontSize: 14,
+    opacity: 0.8,
   },
 });

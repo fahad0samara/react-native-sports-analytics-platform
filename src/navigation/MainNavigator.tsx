@@ -1,39 +1,56 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { MainTabParamList } from './types';
-import HomeScreen from '../screens/main/HomeScreen';
-import MatchesScreen from '../screens/main/MatchesScreen';
-import MatchDetailsScreen from '../screens/main/MatchDetailsScreen';
-import PredictionsScreen from '../screens/main/PredictionsScreen';
-import ProfileScreen from '../screens/main/ProfileScreen';
-import EditProfileScreen from '../screens/main/EditProfileScreen';
+import { MainTabParamList, ProfileStackParamList } from './types';
+import HomeScreen from '../screens/home/HomeScreen';
+import ProfileScreen from '../screens/profile/ProfileScreen';
+import EditProfileScreen from '../screens/profile/EditProfileScreen';
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
+import SettingsScreen from '../screens/settings/SettingsScreen';
+import HelpScreen from '../screens/help/HelpScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
-const MatchesStack = createNativeStackNavigator();
-const ProfileStack = createNativeStackNavigator();
-
-const MatchesNavigator = () => (
-  <MatchesStack.Navigator
-    screenOptions={{
-      headerShown: false,
-    }}
-  >
-    <MatchesStack.Screen name="MatchesList" component={MatchesScreen} />
-    <MatchesStack.Screen name="MatchDetails" component={MatchDetailsScreen} />
-  </MatchesStack.Navigator>
-);
+const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 const ProfileNavigator = () => (
   <ProfileStack.Navigator
     screenOptions={{
-      headerShown: false,
+      headerStyle: {
+        backgroundColor: colors.primary,
+      },
+      headerTintColor: colors.text.light,
+      headerTitleStyle: {
+        fontWeight: 'bold',
+      },
     }}
   >
-    <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
-    <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
+    <ProfileStack.Screen 
+      name="ProfileMain" 
+      component={ProfileScreen}
+      options={{ headerShown: false }}
+    />
+    <ProfileStack.Screen 
+      name="EditProfile" 
+      component={EditProfileScreen}
+      options={{ title: 'Edit Profile' }}
+    />
+    <ProfileStack.Screen 
+      name="Settings" 
+      component={SettingsScreen}
+      options={{ title: 'Settings' }}
+    />
+    <ProfileStack.Screen 
+      name="Help" 
+      component={HelpScreen}
+      options={{ title: 'Help' }}
+    />
+    <ProfileStack.Screen 
+      name="Notifications" 
+      component={NotificationsScreen}
+      options={{ title: 'Notifications' }}
+    />
   </ProfileStack.Navigator>
 );
 
@@ -53,32 +70,14 @@ export default function MainNavigator() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.text.secondary,
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-
-          switch (route.name) {
-            case 'Home':
-              iconName = focused ? 'home' : 'home-outline';
-              break;
-            case 'Matches':
-              iconName = focused ? 'football' : 'football-outline';
-              break;
-            case 'Predictions':
-              iconName = focused ? 'analytics' : 'analytics-outline';
-              break;
-            case 'Profile':
-              iconName = focused ? 'person' : 'person-outline';
-              break;
-            default:
-              iconName = 'help-outline';
-          }
-
+          let iconName = focused 
+            ? route.name === 'Home' ? 'home' : 'person'
+            : route.name === 'Home' ? 'home-outline' : 'person-outline';
           return <Ionicons name={iconName as any} size={size} color={color} />;
         },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Matches" component={MatchesNavigator} />
-      <Tab.Screen name="Predictions" component={PredictionsScreen} />
       <Tab.Screen name="Profile" component={ProfileNavigator} />
     </Tab.Navigator>
   );
